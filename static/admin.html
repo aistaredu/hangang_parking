@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 대시보드 — 한강공원 주차장</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <style>
+        body { background-color: #f0f2f5; }
+        #wrapper {display: flex; min-height: 100vh;}
+        #sidebar {width: 220px;min-width: 220px;background-color: #1e2a3a;color: #cbd5e1;padding-top: 1rem;}
+        #sidebar .nav-link {color: #94a3b8;border-radius: 8px;margin: 2px 8px;padding: 10px 14px;font-size: 0.9rem;
+                            transition: background 0.15s;}
+        #sidebar .nav-link:hover,#sidebar .nav-link.active {background-color: #0d6efd;color: #fff;}
+        #sidebar .sidebar-brand {font-size: 1rem;font-weight: bold;color: #e2e8f0;padding: 0 1rem 1rem;
+                            border-bottom: 1px solid #334155;margin-bottom: 0.5rem;}
+        #mainContent {flex: 1; overflow-y: auto; padding: 1.5rem;}
+
+        .stat-card {border: none;border-radius: 12px;}
+        .stat-card .stat-icon {font-size: 2rem;opacity: 0.8;}
+        .stat-card .stat-value {font-size: 2rem;font-weight: 800;}
+
+        .chart-container {position: relative;height: 260px;}
+        .table thead th {background-color: #343a40;color: #fff;white-space: nowrap;}
+        @media (max-width: 768px) { /* 모바일에서는 Offcanvas로 대체 */
+            #sidebar { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+<!-- Navbar (관리자 전용)  -->
+<nav class="navbar navbar-dark bg-dark shadow-sm sticky-top">
+<div class="container-fluid">
+    <button class="btn btn-outline-light btn-sm d-md-none" type="button"
+            data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar">
+            <i class="bi bi-list"></i> 메뉴
+    </button>
+    <a class="navbar-brand fw-bold" href="/static/index.html"><i class="bi bi-p-square-fill"></i> 관리자 대시보드</a>
+    <div class="d-flex align-items-center gap-2">
+        <span class="text-light small" id="adminNameDisplay"></span>
+        <a href="/static/index.html" class="btn btn-outline-light btn-sm">
+            사용자 화면
+        </a>
+        <button class="btn btn-danger btn-sm" id="logoutBtn">
+            로그아웃
+        </button>
+    </div>
+</div>
+</nav>
+<!-- Offcanvas (모바일 사이드바) -->
+<div class="offcanvas offcanvas-start" tabindex="-1" id="mobileSidebar">
+  <div class="offcanvas-header  bg-dark text-white">
+    <h6 class="offcanvas-title  fw-bold"><i class="bi bi-p-square-fill"></i> 관리자 메뉴</h6>
+    <button type="button" class="btn-close  btn-close-white" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body  p-0 bg-dark">
+    <nav class="nav flex-column pt-2">
+        <a class="nav-link text-light" href="#" onclick="showSection('stats')"><i class="bi bi-bar-chart-line-fill"></i> 통계</a>
+        <a class="nav-link text-light" href="#" onclick="showSection('users')"><i class="bi bi-people-fill"></i> 회원 관리</a>
+        <a class="nav-link text-light" href="#" onclick="showSection('reservations')"><i class="bi bi-calendar-check-fill"></i> 예약 관리</a>
+    </nav>
+  </div>
+</div>
+<!--  Sidebar + 메인 콘텐츠 레이아웃  -->
+<div id="wrapper">
+    <!-- 데스크탑 사이드바 -->
+    <div id="sidebar">
+        <div class="sidebar-brand"><i class="bi bi-p-square-fill"></i> 관리자 메뉴</div>
+        <nav class="nav flex-column">
+            <a class="nav-link  active" href="#" onclick="showSection('stats', this)"><i class="bi bi-bar-chart-line-fill"></i> 통계</a>
+            <a class="nav-link" href="#" onclick="showSection('users', this)"><i class="bi bi-people-fill"></i> 회원 관리</a>
+            <a class="nav-link" href="#" onclick="showSection('reservations', this)"><i class="bi bi-calendar-check-fill"></i> 예약 관리</a>
+            <hr style="border-color:#334155; margin: 1rem 8px;">
+            <a class="nav-link" href="/static/index.html">
+                <i class="bi bi-arrow-left-short"></i> 사용자 화면으로
+            </a>
+        </nav>
+    </div>
+    <!-- 메인 콘텐츠 영역  -->
+    <div id="mainContent">
+        <!--   현재 위치     -->
+        <nav aria-label="breadcrumb"  class="mb-3">
+            <ol class="breadcrumb">
+              <li class="breadcrumb-item"><a href="/static/index.html">Home</a></li>
+              <li class="breadcrumb-item active" id="breadcrumbCurrent">통계 대시보드</li>
+            </ol>
+        </nav>
+        <!-- 섹션 1: 통계 대시보드 (기본 표시)     -->
+        <section id="statsSection">
+            <h4 class="fw-bold mb-4"><i class="bi bi-bar-chart-line-fill"></i> 통계 대시보드</h4>
+            <!--   통계 카드 4개, 모바일크기 1열, 태블릿크기 2열, 데스크탑크기 4열     -->
+            <div class="row  row-cols-1 row-cols-sm-2 row-cols-xl-4 g-3 mb-4">
+                <!-- 카드1: 오늘 예약 수 -->
+                <div class="col">
+                  <div class="card  text-bg-primary stat-card h-100 shadow-sm">
+                    <div class="card-body  d-flex align-items-center gap-3">
+                        <div class="stat-icon"><i class="bi bi-calendar-check-fill"></i></div>
+                        <div>
+                            <div class="small opacity-75">오늘 예약</div>
+                            <div class="stat-value" id="todayReservations">—</div>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- 카드2: 총 회원 수 -->
+                <div class="col">
+                  <div class="card text-bg-success stat-card h-100 shadow-sm">
+                        <div class="card-body  d-flex align-items-center gap-3">
+                            <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+                            <div>
+                                <div class="small opacity-75">총 회원</div>
+                                <div class="stat-value" id="totalUsers">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 카드3: 총 예약 수 -->
+                <div class="col">
+                  <div class="card  text-bg-warning stat-card h-100 shadow-sm">
+                        <div class="card-body  d-flex align-items-center gap-3">
+                            <div class="stat-icon"><i class="bi bi-calendar-event-fill"></i></div>
+                            <div>
+                                <div class="small opacity-75">총 예약</div>
+                                <div class="stat-value" id="totalReservations">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 카드4: 활성 예약 수 -->
+                <div class="col">
+                  <div class="card  text-bg-danger stat-card h-100 shadow-sm">
+                        <div class="card-body  d-flex align-items-center gap-3">
+                            <div class="stat-icon"><i class="bi bi-p-circle-fill"></i></div>
+                            <div>
+                                <div class="small opacity-75">활성 예약</div>
+                                <div class="stat-value" id="activeReservations">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row  g-3 mb-4">
+                <!-- 요일별 Bar Chart -->
+                <div class="col-lg-6">
+                  <div class="card shadow-sm h-100">
+                      <div class="card-header  fw-bold bg-white border-bottom">요일별 평균 회전율(이용률)</div>
+                      <div class="card-body">
+                            <div class="text-center py-3" id="dailySpinner">
+                                <div class="spinner-border text-primary" role="status"></div>
+                            </div>
+                            <div class="chart-container d-none" id="dailyChartWrap">
+                                <!-- Chart.js가 이 <canvas>에 그래프를 그림 -->
+                                <canvas id="dailyChart"></canvas>
+                            </div>
+                            <!-- 상대 비교 범례(색이 무엇을 뜻하는지) -->
+                            <div class="mt-2 text-center" id="dailyLegend"></div>
+                        </div>
+                  </div>
+                </div>
+                <!--  시간대별 Bar Chart     -->
+                <div class="col-lg-6">
+                  <div class="card shadow-sm h-100">
+                      <div class="card-header  fw-bold bg-white border-bottom">시간대별 평균 혼잡도</div>
+                      <div class="card-body">
+                            <div class="text-center py-3" id="hourlySpinner">
+                                <div class="spinner-border text-primary" role="status"></div>
+                            </div>
+                            <div class="chart-container d-none" id="hourlyChartWrap">
+                                <!-- Chart.js가 이 <canvas>에 그래프를 그림 -->
+                                <canvas id="hourlyChart"></canvas>
+                            </div>
+
+                        </div>
+                  </div>
+                </div>
+            </div>
+            <div class="row  g-3 mb-4">
+                <!-- 월별 Bar Chart -->
+                <div class="col-12">
+                  <div class="card shadow-sm h-100">
+                      <div class="card-header  fw-bold bg-white border-bottom">월별 평균 회전율(이용률)</div>
+                      <div class="card-body">
+                            <div class="text-center py-3" id="monthlySpinner">
+                                <div class="spinner-border text-primary" role="status"></div>
+                            </div>
+                            <div class="chart-container d-none" id="monthlyChartWrap">
+                                <!-- Chart.js가 이 <canvas>에 그래프를 그림 -->
+                                <canvas id="monthlyChart"></canvas>
+                            </div>
+                            <!-- 상대 비교 범례(색이 무엇을 뜻하는지) -->
+                            <div class="mt-2 text-center" id="monthlyLegend"></div>
+                        </div>
+                  </div>
+                </div>
+            </div>
+        </section>
+        <!-- 섹션 2: 회원 관리 (기본 숨김)  -->
+        <section id="usersSection" class="d-none">
+            <h4 class="fw-bold mb-4"> 회원 관리</h4>
+            <!--    회원 목록 테이블        -->
+            <div class="card  shadow-sm">
+                <div class="card-header  bg-white d-flex justify-content-between align-items-center">
+                   <span class="fw-bold">전체 회원</span>
+                   <span class="badge bg-secondary" id="userTotalBadge">-</span>
+                </div>
+                <div class="card-body">
+                    <!--       회원 검색           -->
+                    <div class="input-group mb-3"  style="max-width:360px;">
+                        <input type="text" class="form-control" placeholder="이메일 또는 이름 검색" id="userSearchInput">
+                        <button class="btn btn-outline-secondary" type="button" id="userSearchBtn">검색</button>
+                    </div>
+                    <!--        Spinner            -->
+                    <div class="text-center py-3 d-none" id="userSpinner">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                    <!--       회원 목록             -->
+                    <div class="table-responsive d-none"  id="userTableWrap">
+                      <table class="table table-striped table-hover table-sm mb-0">
+                      <thead>
+                        <tr>
+                          <th scope="col">ID</th>
+                          <th scope="col">이메일</th>
+                          <th scope="col">이름</th>
+                          <th scope="col">권한</th>
+                          <th scope="col">가입일</th>
+                        </tr>
+                      </thead>
+                      <tbody  id="userTableBody">
+                      </tbody>
+                    </table>
+                    </div>
+                    <!--        검색 결과 없음            -->
+                    <div class="alert alert-light text-center d-none" id="userEmpty">
+                        검색 결과가 없습니다.
+                    </div>
+                </div>
+                <!--      Pagination          -->
+                <div class="card-footer bg-white">
+                    <ul class="pagination pagination-sm justify-content-center mb-0" id="userPagination"></ul>
+                </div>
+            </div>
+        </section>
+        <!-- 섹션 3: 예약 관리 (기본 숨김)  -->
+        <section id="reservationsSection" class="d-none">
+            <h4 class="fw-bold mb-4"> 예약 관리</h4>
+            <!--    회원 목록 테이블        -->
+            <div class="card  shadow-sm">
+                <div class="card-header  bg-white d-flex justify-content-between align-items-center">
+                   <span class="fw-bold">전체 예약</span>
+                   <span class="badge bg-secondary" id="reservationTotalBadge">-</span>
+                </div>
+                <div class="card-body">
+
+                    <!--        Spinner            -->
+                    <div class="text-center py-3 d-none" id="reservationSpinner">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                    <!--       회원 목록             -->
+                    <div class="table-responsive d-none"  id="reservationTableWrap">
+                      <table class="table table-striped table-hover table-sm mb-0">
+                      <thead>
+                        <tr>
+                          <th scope="col">ID</th>
+                          <th scope="col">회원</th>
+                          <th scope="col">주차장</th>
+                          <th scope="col">예약일</th>
+                          <th scope="col">상태</th>
+                          <th scope="col">생성일</th>
+                        </tr>
+                      </thead>
+                      <tbody  id="reservationTableBody">
+                      </tbody>
+                    </table>
+                    </div>
+
+                </div>
+                <!--      Pagination          -->
+                <div class="card-footer bg-white">
+                    <ul class="pagination pagination-sm justify-content-center mb-0" id="reservationPagination"></ul>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- 공통 API 유틸리티 로드 -->
+<script src="/static/js/api.js"></script>
+<script>
+const USER_PAGE_SIZE        = 15;
+const RESERVATION_PAGE_SIZE = 15;
+
+// 현재 검색 키워드 (회원 검색에서 사용)
+let userSearchKeyword = "";
+
+// JWT 디코딩으로 관리자 권한 확인
+function checkAdminAccess() {
+    const token = getToken();
+    if (!token) {
+        alert("관리자 로그인이 필요합니다.");
+        window.location.href = "/static/index.html";
+        return false;
+    }
+    const payload = getPayload();  // { user_id, role } 또는 null
+    if (!payload) {
+        alert("유효하지 않은 토큰입니다.");
+        window.location.href = "/static/index.html";
+        return false;
+    }
+    if (payload.role !== "admin") {
+        alert("관리자 권한이 필요합니다.");
+        window.location.href = "/static/index.html";
+        return false;
+    }
+    document.querySelector("#adminNameDisplay").textContent = ` 관리자 (ID: ${payload.user_id})`;
+    return true;
+}
+
+// 통계 카드 4개 로드
+async function loadSummaryCards() {
+    try {
+        const s = await apiGet("/admin/stats/summary");
+        document.querySelector("#totalUsers").textContent        = s.total_users.toLocaleString(); // 천 단위 콤마 표시
+        document.querySelector("#totalReservations").textContent = s.total_reservations.toLocaleString();
+        document.querySelector("#todayReservations").textContent = s.today_reservations.toLocaleString();
+        document.querySelector("#activeReservations").textContent = s.active_reservations.toLocaleString();
+    } catch (error) {
+        console.error("통계 카드 로드 실패:", error.message);
+    }
+}
+// 값들을 상대 비교해 4단계 색으로 매핑
+const GRADE_COLORS = [
+    "rgba(25,135,84,0.8)",   // 여유(초록)
+    "rgba(13,110,253,0.8)",  // 보통(파랑)
+    "rgba(255,193,7,0.8)",   // 붐빔(노랑)
+    "rgba(220,53,69,0.8)",   // 매우 붐빔(빨강)
+];
+const GRADE_NAMES = ["여유", "보통", "붐빔", "매우 붐빔"];
+
+function relativeColors(values) {
+    // 이 차트에 들어온 값들 중 최소·최대를 구한다
+    const min = Math.min(...values); // Math.min(10,20,30)
+    const max = Math.max(...values);
+    const span = (max - min) || 1;  // 전부 같은 값이면 0 나누기 방지로 1
+    const step = span / 4;   // '최소~최대'를 4등분해서 상대적으로 낮음→높음을 색으로 표현
+    const bucketOf = (v) => Math.min(3, Math.floor((v - min) / step)); // 각 값이 몇 번째 구간에 드는지 계산
+    const colors = values.map(v => GRADE_COLORS[bucketOf(v)]); // 값마다 등급 색 매핑
+    // 범례 데이터
+    const legend = GRADE_NAMES.map((name, i) => ({
+        label: name,
+        color: GRADE_COLORS[i],
+        range: `${Math.round(min + step * i)}~${Math.round(min + step * (i + 1))}%`,
+    }));
+    return { colors, legend };
+}
+// 범례를 지정한 컨테이너에 그린다 (색 네모 + 이름 + 값 범위)
+function renderLegend(containerId, legend) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const items = legend.map(g => `
+        <span class="d-inline-flex align-items-center me-3 mb-1 small">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:3px;
+                         background:${g.color};margin-right:4px;"></span>
+            ${g.label} <span class="text-muted ms-1">(${g.range})</span>
+        </span>
+    `).join("");
+    el.innerHTML = items +
+        `<div class="text-muted mt-1" style="font-size:0.75rem;">
+            ※ 색은 이 차트 내 상대 비교입니다(예측 화면의 절대 등급과 기준이 다를 수 있음)
+         </div>`;
+}
+
+// 요일별 평균 회전율 Bar Chart
+async function loadDailyChart() {
+    try {
+        const data = await apiGet("/admin/stats/daily");
+        document.querySelector("#dailySpinner").classList.add("d-none");
+        document.querySelector("#dailyChartWrap").classList.remove("d-none");
+        const labels = data.map(d => `${d.day_name}요일`);
+        const values = data.map(d => d.avg_occupancy_pct);
+        const { colors, legend } = relativeColors(values);
+        renderLegend("dailyLegend", legend);
+        new Chart(document.querySelector("#dailyChart"), {
+            type: 'bar',
+            data: {
+              labels,
+              datasets: [{
+                label: "평균 회전율(%)",
+                data: values,
+                backgroundColor: colors,
+                borderRadius: 6
+              }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: { y: {  beginAtZero: true, ticks: { callback: v => `${v}%` } } }
+            }
+        });
+    } catch (e) {
+         document.querySelector("#dailySpinner").innerHTML =
+            `<div class="text-danger small">로드 실패: ${e.message}</div>`;
+    }
+}
+
+// 시간대별 평균 혼잡도 Bar Chart, parking_daily에 시간 데이터가 없으므로, 임시로 예약(reservation) 데이터의 시간대별 건수로 시각화
+async function loadHourlyChart() {
+    try {
+        const data = await apiGet("/admin/stats/hourly");
+        document.querySelector("#hourlySpinner").classList.add("d-none");
+        document.querySelector("#hourlyChartWrap").classList.remove("d-none");
+
+        const labels = data.map(d => `${d.hour}시`);
+        const values = data.map(d => d.avg_count);
+
+        new Chart(document.querySelector("#hourlyChart"), {
+            type: 'bar',
+            data: {
+              labels,
+              datasets: [{
+                label: "평균 예약 건수",
+                data: values,
+                backgroundColor: "rgba(13,110,253,0.7)",
+                borderRadius: 4
+              }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: { y: {  beginAtZero: true } }
+            }
+        });
+
+    } catch (e) {
+            document.querySelector("#hourlySpinner").innerHTML =
+            `<div class="text-danger small">로드 실패: ${e.message}</div>`;
+    }
+}
+//  월별 평균 혼잡도 Bar Chart
+async function loadMonthlyChart() {
+    try {
+        const data = await apiGet("/admin/stats/monthly");
+
+        document.querySelector("#monthlySpinner").classList.add("d-none");
+        document.querySelector("#monthlyChartWrap").classList.remove("d-none");
+
+        // x축 라벨("1월"~"12월")과 y축 값(평균 회전율%) 분리
+        const labels = data.map(d => `${d.month}월`);
+        const values = data.map(d => d.avg_occupancy_pct);
+
+        // 상대 비교: 값 범위 4등분 색상 + 범례
+        const { colors, legend } = relativeColors(values);
+        renderLegend("monthlyLegend", legend);
+
+         new Chart(document.querySelector("#monthlyChart"), {
+            type: 'bar',
+            data: {
+              labels,
+              datasets: [{
+                label: "평균 회전율(%)",
+                data: values,
+                backgroundColor: colors,
+                borderRadius: 6
+              }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: { y: {  beginAtZero: true, ticks: { callback: v => `${v}%` } } }
+            }
+        });
+
+    } catch (e) {
+            document.querySelector("#monthlySpinner").innerHTML =
+            `<div class="text-danger small">로드 실패: ${e.message}</div>`;
+    }
+
+}
+// 날짜 포맷 변환 유틸리티
+function fmtDate(s) {
+    if (!s) return "—";
+    return String(s).slice(0, 16).replace("T", " "); // "2026-08-15T10:30:00" → "2026-08-15 10:30"
+}
+// 공통 페이지네이션 렌더링
+function renderPagination(ulId, total, currentPage, pageSize, loadFn) {
+    const totalPages = Math.ceil(total / pageSize);
+    const ul = document.getElementById(ulId);
+    if (totalPages <= 1) { ul.innerHTML = ""; return; }
+
+    let html = "";
+    for (let i = 1; i <= totalPages; i++) {
+        html += `
+            <li class="page-item ${i === currentPage ? "active" : ""}">
+                <button class="page-link" onclick="(${loadFn.toString()})(${i})">
+                    ${i}
+                </button>
+            </li>`;
+    }
+    ul.innerHTML = html;
+}
+
+// 회원 목록 로드 (검색 포함)
+async function loadUsers(page = 1, keyword = "") {
+    document.querySelector("#userSpinner").classList.remove("d-none");
+    document.querySelector("#userTableWrap").classList.add("d-none");
+    document.querySelector("#userEmpty").classList.add("d-none");
+    try { // GET /admin/users?page=N&size=15&search=키워드, encodeURIComponent()는 영문자, 숫자, 그리고 일부 안전한 특수 문자를 제외한 모든 문자를 UTF-8 인코딩을 사용하여 퍼센트 인코딩(%XX 형태)으로 변환
+        const url = keyword
+            ? `/admin/users?page=${page}&size=${USER_PAGE_SIZE}&search=${encodeURIComponent(keyword)}`
+            : `/admin/users?page=${page}&size=${USER_PAGE_SIZE}`;
+        const data = await apiGet(url);
+        document.querySelector("#userTotalBadge").textContent = `총 ${data.total}명`;
+        if (data.items.length === 0) {
+            document.querySelector("#userEmpty").classList.remove("d-none");
+        } else {
+            const tbody = document.querySelector("#userTableBody");
+            tbody.innerHTML = data.items.map(u => `<tr>
+                    <td class="text-muted">${u.id}</td>
+                    <td>${u.email}</td>
+                    <td>${u.name}</td>
+                    <td><span class="badge ${u.role === "admin" ? "text-bg-danger" : "text-bg-secondary"}">
+                            ${u.role}
+                        </span>
+                    </td>
+                    <td class="small">${fmtDate(u.created_at)}</td>
+                </tr>`).join("");
+            document.querySelector("#userTableWrap").classList.remove("d-none");
+        }
+        renderPagination("userPagination", data.total, page, USER_PAGE_SIZE, p => loadUsers(p, userSearchKeyword));
+    } catch (e) {
+        document.querySelector("#userTableWrap").innerHTML = `<div class="alert alert-danger m-3">로드 실패: ${e.message}</div>`;
+        document.querySelector("#userTableWrap").classList.remove("d-none");
+    } finally {
+        document.querySelector("#userSpinner").classList.add("d-none");
+    }
+}
+
+// 예약 목록 로드
+async function loadReservations(page = 1) {
+    document.querySelector("#reservationSpinner").classList.remove("d-none");
+    document.querySelector("#reservationTableWrap").classList.add("d-none");
+    try {
+        const data = await apiGet(`/admin/reservations?page=${page}&size=${RESERVATION_PAGE_SIZE}`);
+        document.querySelector("#reservationTotalBadge").textContent = `총 ${data.total}건`;
+        // 예약 상태별 Badge 색상
+        const statusBadge = {
+            "active"   : "text-bg-success",
+            "completed": "text-bg-primary",
+            "cancelled": "text-bg-secondary",
+        };
+        document.querySelector("#reservationTableBody").innerHTML =
+            data.items.map(r => `
+                <tr>
+                    <td class="text-muted">${r.id}</td>
+                    <td class="small">${r.user_id}</td>
+                    <td>${r.lot_name}</td>
+                    <td>${r.reserved_date}</td>
+                    <td>
+                        <span class="badge ${statusBadge[r.status] || "text-bg-secondary"}">
+                            ${r.status}
+                        </span>
+                    </td>
+                    <td class="small">${fmtDate(r.created_at)}</td>
+                </tr>
+            `).join("");
+        document.querySelector("#reservationTableWrap").classList.remove("d-none");
+        renderPagination("reservationPagination", data.total, page, RESERVATION_PAGE_SIZE, loadReservations);
+    } catch (e) {
+         document.querySelector("#reservationSpinner").innerHTML =
+            `<div class="alert alert-danger mx-3">로드 실패: ${e.message}</div>`;
+    } finally {
+         document.querySelector("#reservationSpinner").classList.add("d-none");
+    }
+}
+
+// 섹션 전환 + 사이드바 활성 표시
+function showSection(name, el) {
+    // 모든 섹션 숨기기
+    ["statsSection", "usersSection", "reservationsSection"].forEach(id => document.getElementById(id).classList.add("d-none"));
+    // 선택한 섹션만 표시
+    document.getElementById(`${name}Section`).classList.remove("d-none");
+    // 사이드바 active 클래스 이동
+    document.querySelectorAll("#sidebar .nav-link").forEach(a => a.classList.remove("active"));
+    if (el) el.classList.add("active");
+    // Breadcrumb 업데이트
+    const names = { stats: "통계 대시보드", users: "회원 관리", reservations: "예약 관리" };
+    document.querySelector("#breadcrumbCurrent").textContent = names[name] || name;
+    // 모바일 Offcanvas 닫기
+    const offcanvas = bootstrap.Offcanvas.getInstance(document.querySelector("#mobileSidebar"));
+    if (offcanvas) offcanvas.hide();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    // 1) 관리자 접근 권한 확인
+    if (!checkAdminAccess()) return;
+
+    // 2) 통계 섹션 데이터 로드
+    loadSummaryCards();
+    loadDailyChart();
+    loadHourlyChart();
+    loadMonthlyChart();
+
+    // 4) 로그아웃
+    document.getElementById("logoutBtn").addEventListener("click", () => {
+        removeToken();
+        localStorage.removeItem("user_name");
+        window.location.href = "/static/index.html";
+    });
+
+    // 5) 회원 검색 버튼
+    document.querySelector("#userSearchBtn").addEventListener("click", () => {
+        userSearchKeyword = document.querySelector("#userSearchInput").value.trim();
+        loadUsers(1, userSearchKeyword);
+    });
+
+    // 6) 검색 Enter 키
+    document.querySelector("#userSearchInput").addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+            userSearchKeyword = e.target.value.trim();
+            loadUsers(1, userSearchKeyword);
+        }
+    });
+
+    // 7) 사이드바 메뉴 클릭 → 각 섹션 데이터 로드
+    document.querySelectorAll("#sidebar .nav-link").forEach(link => {
+        link.addEventListener("click", () => {
+            const section = link.textContent.trim();
+            if (section.includes("회원")) loadUsers(1);
+            if (section.includes("예약")) loadReservations(1);
+        });
+    });
+
+});
+</script>
+</body>
+</html>

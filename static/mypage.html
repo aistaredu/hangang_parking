@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내 예약 - 한강공원 주차장 예측</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <style>
+        body { background-color: #f8f9fa; }
+        .reservation-item {cursor: pointer; transition: background-color 0.1s;}
+        .reservation-item:hover {background-color: #f0f4ff !important;}
+        .toast-container {position: fixed;bottom: 1rem;right: 1rem;z-index: 1100;}
+    </style>
+</head>
+<body>
+<!-- navbar: layout.js가 채워 넣음 (모든 페이지 공통) -->
+<div id="navbar-placeholder"></div>
+
+<!-- Modal (로그인·회원가입 팝업)  -->
+<div class="modal fade" id="authModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <!-- Modal 헤더 -->
+      <div class="modal-header  border-0 pb-0">
+        <h5 class="modal-title fw-bold"><i class="bi bi-p-square-fill"></i> 한강공원 주차 예측</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <!-- Modal 본문 -->
+      <div class="modal-body  pt-0">
+        <ul class="nav nav-tabs  nav-fill mb-3">
+          <li class="nav-item">
+                <button class="nav-link active fw-bold"
+                                data-bs-toggle="tab"
+                                data-bs-target="#loginPane">
+                    로그인
+                </button>
+          </li>
+          <li class="nav-item">
+                <button class="nav-link fw-bold"
+                                data-bs-toggle="tab"
+                                data-bs-target="#signupPane">
+                    회원가입
+                </button>
+          </li>
+
+        </ul>
+        <!--   탭 패널들의 컨테이너       -->
+        <div class="tab-content" id="authTabContent">
+            <!--     로그인 탭 패널       -->
+            <div class="tab-pane fade show active" id="loginPane">
+                <div class="mb-3">
+                  <label for="loginEmail" class="form-label  fw-bold">이메일</label>
+                  <input type="email" class="form-control" id="loginEmail" placeholder="이메일을 입력하세요" autocomplete="email">
+                </div>
+                <div class="mb-3">
+                  <label for="loginPw" class="form-label  fw-bold">비밀번호</label>
+                  <input type="password" class="form-control" id="loginPw" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
+                </div>
+                <div class="alert alert-danger  d-none mb-3" id="loginError" role="alert">
+
+                </div>
+                <button type="button" class="btn btn-primary  w-100 fw-bold" id="loginSubmitBtn">로그인</button>
+            </div>
+            <!--     회원가입 탭 패널       -->
+            <div class="tab-pane fade" id="signupPane">
+                <div class="mb-3">
+                  <label for="signupName" class="form-label  fw-bold">이름</label>
+                  <input type="text" class="form-control" id="signupName" placeholder="이름을 입력하세요" autocomplete="name">
+                </div>
+                <div class="mb-3">
+                  <label for="signupEmail" class="form-label  fw-bold">이메일</label>
+                  <input type="email" class="form-control" id="signupEmail" placeholder="이메일을 입력하세요" autocomplete="email">
+                </div>
+                <div class="mb-3">
+                  <label for="signupPw" class="form-label  fw-bold">비밀번호</label>
+                  <input type="password" class="form-control" id="signupPw" placeholder="대·소문자·숫자·특수문자 포함 8자 이상" autocomplete="new-password">
+                </div>
+                <div class="mb-3">
+                  <label for="signupPwConfirm" class="form-label  fw-bold">비밀번호 확인</label>
+                  <input type="password" class="form-control" id="signupPwConfirm" placeholder="비밀번호를 다시 입력하세요" autocomplete="new-password">
+                </div>
+                <!-- 회원가입 오류 메시지 Alert -->
+                <div class="alert alert-danger  d-none mb-3" id="signupError" role="alert">
+
+                </div>
+                <button type="button" class="btn btn-success   w-100 fw-bold" id="signupSubmitBtn">회원가입</button>
+            </div><!-- /signupPane -->
+        </div><!-- /tab-content -->
+      </div><!-- /modal-body -->
+
+    </div><!-- /modal-content -->
+  </div><!-- /modal-dialog -->
+</div><!-- /#authModal -->
+
+<!--  Modal (예약 취소 확인)  -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+  <div class="modal-dialog  modal-dialog-centered"> <!-- 화면 수직 중앙에 Modal 표시 -->
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title  fw-bold">예약 취소</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">정말로 예약을 취소하시겠습니까?</p>
+        <!-- 취소할 예약 정보 표시 (JS로 동적 변경) -->
+        <p class="text-muted small" id="cancelModalInfo">  </p>
+        <p class="text-danger small mb-0">취소 후에는 되돌릴 수 없습니다.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">돌아가기</button>
+        <button type="button" class="btn btn-danger fw-bold" id="confirmCancelBtn">취소 확인</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Offcanvas (예약 상세 슬라이드 패널) , 화면 가장자리에서 슬라이드로 등장하는 패널,오른쪽("end")에서 나타난다 -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="detailPanel">
+  <div class="offcanvas-header  border-bottom">
+    <h5  class="offcanvas-title fw-bold">예약 상세</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <!-- 주차장 정보 섹션 -->
+    <div class="mb-4">
+        <p class="text-muted small mb-1 fw-bold"><i class="bi bi-geo-fill"></i> 주차장</p>
+        <h5 class="fw-bold" id="detailLotName">—</h5>
+    </div>
+
+    <!-- 예약 정보 섹션 -->
+    <div class="row mb-4 g-3">
+        <div class="col-6">
+            <p class="text-muted small mb-1">예약 날짜</p>
+            <p class="fw-bold mb-0" id="detailDate">—</p>
+        </div>
+        <div class="col-6">
+            <p class="text-muted small mb-1">상태</p>
+            <!-- Badge는 JS로 동적으로 채움 -->
+            <span class="badge" id="detailStatusBadge">—</span>
+        </div>
+        <div class="col-6">
+            <p class="text-muted small mb-1">예약 번호</p>
+            <p class="fw-bold mb-0" id="detailId">—</p>
+        </div>
+        <div class="col-6">
+            <p class="text-muted small mb-1">예약 일시</p>
+            <p class="fw-bold mb-0 small" id="detailCreatedAt">—</p>
+        </div>
+    </div>
+      <hr>
+      <!-- 취소 버튼 (active 상태일 때만 JS로 표시) -->
+      <button class="btn btn-danger w-100 fw-bold d-none" id="cancelBtn">예약 취소</button>
+      <!-- 이미 취소된 경우 안내 메시지 -->
+      <div class="alert alert-secondary d-none" id="alreadyCancelledMsg">이미 취소된 예약입니다.</div>
+    </div><!-- /offcanvas-body -->
+</div><!-- /offcanvas -->
+
+<!-- Toast (알림 메시지), 화면 모서리에 잠깐 나타났다가 자동으로 사라지는 알림 컴포넌트 -->
+<div  class="toast-container" role="region" aria-live="polite">
+  <div  id="liveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive">
+    <div class="d-flex">
+        <div class="toast-body fw-bold" id="toastMessage"></div><!-- JS로 동적으로 메시지 내용 변경 -->
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="닫기"></button>
+    </div>
+  </div>
+</div>
+<!-- 메인 콘텐츠 영역  -->
+<div class="container mt-4">
+    <!-- 페이지 제목 -->
+    <div class="row mb-3">
+        <div class="col">
+            <h2 class="fw-bold">내 예약 내역</h2>
+            <p class="text-muted mb-0">
+                예약 항목을 클릭하면 상세 정보와 취소 버튼이 표시됩니다
+            </p>
+        </div>
+    </div>
+    <!-- 상태별 필터 탭  -->
+    <ul class="nav nav-tabs  nav-fill mb-3"  id="reservationTabs">
+      <li class="nav-item">
+            <!-- active: 기본으로 선택된 탭 -->
+            <button class="nav-link active fw-bold"
+                    data-bs-toggle="tab"
+                    data-bs-target="#allPane"
+                    data-status="">
+                전체
+            </button>
+      </li>
+      <li class="nav-item">
+            <button class="nav-link fw-bold"
+                    data-bs-toggle="tab"
+                    data-bs-target="#activePane"
+                    data-status="active">
+                예약중
+            </button>
+      </li>
+      <li class="nav-item">
+            <button class="nav-link fw-bold"
+                    data-bs-toggle="tab"
+                    data-bs-target="#completedPane"
+                    data-status="completed">
+                완료
+            </button>
+      </li>
+      <li class="nav-item">
+            <button class="nav-link fw-bold"
+                    data-bs-toggle="tab"
+                    data-bs-target="#cancelledPane"
+                    data-status="cancelled">
+                취소
+            </button>
+      </li>
+    </ul>
+    <!-- 탭 패널 컨테이너   -->
+    <div class="tab-content">
+        <!-- 전체 탭 패널  -->
+        <div class="tab-pane fade show active" id="allPane">
+            <!--     Spinner: 로딩 중 표시       -->
+            <div class="text-center py-4 d-none" id="allLoading">
+                <div class="spinner-border text-primary  spinner-border-sm"></div>
+                <span class="ms-2 text-muted">불러오는 중...</span>
+            </div>
+            <!--   예약 목록 컨테이너    -->
+            <div class="list-group"  id="allList"></div>
+        </div>
+    <!-- 예약중 탭 패널 -->
+        <div class="tab-pane fade" id="activePane">
+            <!--     Spinner: 로딩 중 표시       -->
+            <div class="text-center py-4 d-none" id="activeLoading">
+                <div class="spinner-border text-primary  spinner-border-sm"></div>
+                <span class="ms-2 text-muted">불러오는 중...</span>
+            </div>
+            <!--   예약 목록 컨테이너    -->
+            <div class="list-group"  id="activeList"></div>
+        </div>
+    <!-- 완료 탭 패널 -->
+        <div class="tab-pane fade" id="completedPane">
+            <!--     Spinner: 로딩 중 표시       -->
+            <div class="text-center py-4 d-none" id="completedLoading">
+                <div class="spinner-border text-primary  spinner-border-sm"></div>
+                <span class="ms-2 text-muted">불러오는 중...</span>
+            </div>
+            <!--   예약 목록 컨테이너    -->
+            <div class="list-group"  id="completedList"></div>
+        </div>
+    <!-- 취소 탭 패널 -->
+        <div class="tab-pane fade" id="cancelledPane">
+            <!--     Spinner: 로딩 중 표시       -->
+            <div class="text-center py-4 d-none" id="cancelledLoading">
+                <div class="spinner-border text-primary  spinner-border-sm"></div>
+                <span class="ms-2 text-muted">불러오는 중...</span>
+            </div>
+            <!--   예약 목록 컨테이너    -->
+            <div class="list-group"  id="cancelledList"></div>
+        </div>
+    </div><!-- /tab-content -->
+</div><!-- /container -->
+
+<!-- footer: layout.js가 채워 넣음 (모든 페이지 공통) -->
+<div id="footer-placeholder"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+<!-- 공통 API 유틸리티 로드 -->
+<script src="/static/js/api.js"></script>
+<!-- 공통 navbar/footer (api.js 이후에 로드) -->
+<script src="/static/js/layout.js"></script>
+<!-- 동작 js -->
+<script>
+// 전역 상태 변수
+let selectedReservationId = null;
+
+// 예약 취소 API 호출
+ async function executeCancel() {
+    if (!selectedReservationId) return;
+    try {
+        await apiDelete(`/reservations/${selectedReservationId}`);
+        // 취소 성공 후 처리
+        // 취소 확인 Modal 닫기
+        bootstrap.Modal.getInstance(document.querySelector("#cancelModal"))?.hide();
+        // 옵셔널 체이닝 ?.hide()는 getInstance()가 null이면 오류 없이 무시
+
+        // Offcanvas 닫기
+        bootstrap.Offcanvas.getInstance(document.querySelector("#detailPanel"))?.hide();
+
+        // Toast 성공 알림
+        showToast("예약이 취소되었습니다.", "warning");
+
+        // 현재 활성 탭 데이터 새로고침
+        const activeTab = document.querySelector("#reservationTabs .nav-link.active");
+        const status    = activeTab ? activeTab.dataset.status : "";
+        loadTabData(status);
+    } catch (error) {
+        // 취소 실패: 이미 취소된 예약 등
+        showToast(`취소 실패: ${error.message}`, "danger");
+    }
+}
+
+// 취소 확인 Modal 열기
+function openCancelModal() {
+    // 취소할 예약 정보를 Modal에 미리 표시
+    const lotName = document.querySelector("#detailLotName").textContent;
+    const date    = document.querySelector("#detailDate").textContent;
+    document.querySelector("#cancelModalInfo").textContent = `${lotName} / ${date}`;
+    // Modal 열기
+    const cancelModalEl = document.querySelector("#cancelModal");
+    bootstrap.Modal.getOrCreateInstance(cancelModalEl).show();
+}
+
+// Offcanvas 열기 + 상세 정보 표시
+function openDetail(reservation) {
+    // 선택된 예약 ID를 전역변수에 저장 (취소 확인 Modal에서 사용)
+    selectedReservationId = reservation.id;
+    // Offcanvas 내용 동적 설정
+    document.querySelector("#detailLotName").textContent  = reservation.lot_name;
+    document.querySelector("#detailDate").textContent     = reservation.reserved_date;
+    document.querySelector("#detailId").textContent       = `#${reservation.id}`;
+    // created_at 날짜 한국어 형식으로 변환
+    document.querySelector("#detailCreatedAt").textContent =
+        new Date(reservation.created_at).toLocaleString("ko-KR");
+    // Badge 상태 설정
+    const cfg     = STATUS_CONFIG[reservation.status] || { badgeClass: "bg-secondary", label: reservation.status };
+    const statusBadge = document.querySelector("#detailStatusBadge");
+    statusBadge.className   = `badge fs-6 ${cfg.badgeClass}`;
+    statusBadge.textContent = cfg.label;
+    // 취소 버튼 표시 제어
+    const cancelBtn        = document.querySelector("#cancelBtn");
+    const alreadyCancelled = document.querySelector("#alreadyCancelledMsg");
+    if (reservation.status === "active") {
+        // 예약중 상태만 취소 가능
+        cancelBtn.classList.remove("d-none"); // 취소 버튼 표시
+        alreadyCancelled.classList.add("d-none"); // 안내 메시지 숨김
+    } else {
+        // 이미 완료됐거나 취소된 예약
+        cancelBtn.classList.add("d-none"); // 취소 버튼 숨김
+        alreadyCancelled.classList.remove("d-none"); // 안내 메시지 표시
+    }
+    // Offcanvas 열기
+    const offcanvasEl = document.querySelector("#detailPanel");
+    bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl).show();
+}
+
+// STATUS_CONFIG — 예약 상태별 Badge + 텍스트 설정
+const STATUS_CONFIG = {
+    //  상태값     뱃지 클래스(색)         표시 텍스트
+    active   : { badgeClass: "bg-success",   label: "예약중"  },
+    completed: { badgeClass: "bg-primary",   label: "이용완료" },
+    cancelled: { badgeClass: "bg-secondary", label: "취소됨"  },
+};
+
+//  List Group 항목 HTML 생성
+function createReservationItem(reservation) {
+    // STATUS_CONFIG에서 상태별 Badge 설정 조회, 없는 상태이면 회색 뱃지(기본값) 사용
+    const cfg = STATUS_CONFIG[reservation.status] || { badgeClass: "bg-secondary", label: reservation.status };
+    return `
+         <div class="list-group-item list-group-item-action reservation-item py-3"
+         onclick="openDetail(${JSON.stringify(reservation).replace(/"/g, '&quot;')})">
+        <!-- JavaScript 객체(Object)를 JSON 문자열(String)로 변환, 문자열 속에 있는 모든 쌍따옴표(")를 HTML 특수문자인 &quot;로 치환       -->
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1 fw-bold">${reservation.lot_name}</h6>
+                    <small class="text-muted">
+                         <i class="bi bi-calendar-check"></i>
+                        ${reservation.reserved_date}
+                        &nbsp;|&nbsp;
+                        #${reservation.id}
+                    </small>
+                </div>
+                <span class="badge ${cfg.badgeClass} ms-2">
+                    ${cfg.label}
+                </span>
+            </div>
+        </div>
+    `;
+}
+
+
+// API 호출 & 목록 렌더링, GET /reservations/me 또는 /reservations/me?reservation_status={status}를
+// 호출해서 해당 탭의 List Group에 예약 항목을 렌더링
+async function loadReservations(status, listId, loadingId) {
+    const listEl    = document.querySelector("#" + listId);
+    const loadingEl = document.querySelector("#" + loadingId);
+    // Spinner 표시 + 기존 목록 초기화
+    loadingEl.classList.remove("d-none");
+    listEl.innerHTML = "";
+    try {
+        // 상태 파라미터가 있으면 필터링, 없으면 전체 조회
+        const url  = status ? `/reservations/me?reservation_status=${status}` : `/reservations/me`;
+        const data = await apiGet(url); // [{},{},{}]
+        if (data.length === 0) {
+            //  Alert: 빈 목록 안내
+            listEl.innerHTML = `
+                <div class="alert alert-light border text-center py-4">
+                    <p class="mb-0 text-muted">예약 내역이 없습니다.</p>
+                </div>
+            `;
+            return;
+        }
+        // 각 예약 항목을 List Group 항목 HTML로 변환 후 삽입
+        listEl.innerHTML = data.map(r => createReservationItem(r)).join(""); //배열을 하나의 문자열로 합침
+
+    } catch (error) {
+        // Alert: API 오류 메시지
+        listEl.innerHTML = `
+            <div class="alert alert-danger">
+                예약 정보를 불러올 수 없습니다: ${error.message}
+            </div>
+        `;
+    } finally {
+        // try 성공 , catch 실패 상관없이 항상 Spinner 숨김
+        loadingEl.classList.add("d-none");
+    }
+}
+
+// 탭 데이터 로드 공통 함수
+function loadTabData(status) {
+    const config = { // status → { listId, loadingId } 매핑 테이블
+        ""         : { listId: "allList",       loadingId: "allLoading"       },
+        "active"   : { listId: "activeList",    loadingId: "activeLoading"    },
+        "completed": { listId: "completedList", loadingId: "completedLoading" },
+        "cancelled": { listId: "cancelledList", loadingId: "cancelledLoading" },
+    };
+    // 알 수 없는 status이면 전체 탭("")을 기본값으로 사용
+    const { listId, loadingId } = config[status] || config[""];
+    loadReservations(status, listId, loadingId);
+}
+
+
+
+
+// Toast 알림 표시
+function showToast(message, type = "success") {
+    const toastEl  = document.querySelector("#liveToast");
+    const toastMsg = document.querySelector("#toastMessage");
+
+    // 이전에 적용된 text-bg-* 클래스를 제거하고 새 색상 적용
+    toastEl.className = `toast align-items-center border-0 text-bg-${type}`;
+
+    // 표시할 메시지 텍스트 설정
+    toastMsg.textContent = message;
+
+    // Bootstrap Toast 인스턴스 생성 & 표시, 3초 후 자동으로 닫힘
+    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+    toast.show();
+}
+
+// Modal 닫기
+function closeModal() {
+    const modalEl       = document.querySelector("#authModal");
+    const modalInstance = bootstrap.Modal.getInstance(modalEl);// 이미 열려있는 Modal의 인스턴스를 반환
+    if (modalInstance) modalInstance.hide(); // Modal이 열리지 않은 상태이면 null 반환
+}
+
+// Alert 오류 메시지 표시
+function showError(elementId, message) {
+    const el = document.querySelector("#" + elementId);
+    el.textContent = message; // 오류 메시지 텍스트 설정
+    el.classList.remove("d-none"); // 숨김 해제 → 화면에 표시
+}
+
+// Alert 오류 메시지 숨김
+function clearError(elementId) {
+    const el = document.querySelector("#" + elementId); //div
+    el.textContent = "";        // 텍스트 초기화
+    el.classList.add("d-none"); // d-none 추가 → 다시 숨김
+}
+
+// 로그인 처리 함수
+async function handleLogin() {
+    const email    = document.querySelector("#loginEmail").value.trim();
+    const password = document.querySelector("#loginPw").value;
+
+    // 서버 요청 전 유효성 검사
+    if (!email || !password) { // !email: 빈 문자열(""), null, undefined 모두 true
+        showError("loginError", "이메일과 비밀번호를 모두 입력해주세요.");
+        return; // 함수 종료
+    }
+    clearError("loginError"); // 이전 오류 메시지 초기화
+    try {
+        // POST /users/login 호출
+        const data = await apiPost("/users/login", { email, password });
+        //토큰 저장
+        saveToken(data.access_token);
+        // 사용자 이름 저장 (Navbar 표시용), user1@test.com -> user1
+        localStorage.setItem("user_name", email.split("@")[0]);
+
+        closeModal();
+        updateNavbar();
+        showToast("로그인 성공! 환영합니다 ", "success");
+        // 전체 예약 목록 로드
+        loadTabData("");
+    }catch (error) {
+        showError("loginError", error.message || "로그인에 실패했습니다.");
+    }
+}
+
+
+
+// 로그아웃 처리 함수
+function handleLogout() {
+    removeToken(); // api.js
+    localStorage.removeItem("user_name");
+    updateNavbar(); // Navbar를 "로그인 버튼" 상태로 전환
+    showToast("로그아웃 되었습니다.", "warning");
+}
+
+
+
+// DOMContentLoaded — 페이지 초기화 이벤트
+document.addEventListener("DOMContentLoaded", () => { // HTML 파싱이 완료되어 모든 DOM 요소에 접근 가능한 시점
+
+    // Navbar 초기 상태 복원, 새로고침 시 localStorage에 토큰이 있으면 로그인 상태로 표시
+    // updateNavbar();
+
+    //  로그인 여부에 따른 분기 처리
+    if (!isLoggedIn()) {
+        // 비로그인: 로그인 Modal 자동 오픈
+        const authModalEl = document.querySelector("#authModal");
+        new bootstrap.Modal(authModalEl).show();
+    } else {
+        // 로그인 상태: 전체 예약 목록 바로 로드
+        loadTabData("");
+    }
+
+    // Tab 전환 이벤트 등록
+    document.querySelector("#reservationTabs").addEventListener("show.bs.tab", (e) => { //Bootstrap Tab이 전환될 때 발생하는 커스텀 이벤트
+            const status = e.target.dataset.status; // .dataset.status: 버튼의 data-status 속성값
+            loadTabData(status);
+        });
+
+    // Offcanvas 안 취소 버튼
+    document.querySelector("#cancelBtn").addEventListener("click", openCancelModal);
+
+    // 취소 확인 Modal의 "취소 확인" 버튼
+     document.querySelector("#confirmCancelBtn").addEventListener("click", executeCancel);
+
+/*
+    // 로그아웃 버튼
+    document.querySelector("#logoutBtn")
+        .addEventListener("click", handleLogout);
+    // 로그인 제출 버튼
+    document.querySelector("#loginSubmitBtn")
+        .addEventListener("click", handleLogin);
+    // 비밀번호 필드에서 Enter 키 → 로그인 실행
+    document.querySelector("#loginPw")
+        .addEventListener("keydown", (e) => {
+            if (e.key === "Enter") handleLogin();
+        });
+
+    // Modal 닫힘 이벤트, 이 시점에 입력값과 오류 메시지를 초기화
+    document.querySelector("#authModal")
+        .addEventListener("hidden.bs.modal", () => { //Bootstrap Modal이 완전히 닫힌 후 발생하는 커스텀 이벤트
+            // 모든 입력 필드 초기화
+            ["loginEmail", "loginPw",
+             "signupName", "signupEmail", "signupPw", "signupPwConfirm"]
+                .forEach(id => {
+                    document.querySelector("#" + id).value = "";
+                    });
+            // 오류 메시지 초기화 (d-none 추가 + 텍스트 제거)
+            clearError("loginError");
+            clearError("signupError");
+        });
+
+ */
+});
+</script>
+</body>
+</html>

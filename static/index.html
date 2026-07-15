@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>한강공원 주차장 예측</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=c95edd9367e1fa46bb11ac05ab2b46bf&libraries=services"></script>
+    <style>
+        body { background-color: #f8f9fa; }
+        /* 카카오맵 컨테이너 */
+        #kakaoMap {width : 100%;height: 400px;   /* 지도 높이 고정 */
+            border-radius: 12px;border: 1px solid #dee2e6;}
+        #loadingSpinner {display: none;text-align: center;padding: 40px;}
+        .parking-card{cursor: pointer;transition: transform 0.15s, box-shadow 0.15s;}
+        .parking-card:hover {transform: translateY(-3px);box-shadow: 0 6px 20px rgba(0,0,0,0.12) !important;}
+        .toast-container {position: fixed;bottom: 1rem;right: 1rem;z-index: 1100;}
+    </style>
+</head>
+<body>
+<!-- navbar: layout.js가 채워 넣음 (모든 페이지 공통) -->
+<div id="navbar-placeholder"></div>
+
+<!-- Modal (로그인·회원가입 팝업)  -->
+<div class="modal fade" id="authModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <!-- Modal 헤더 -->
+      <div class="modal-header  border-0 pb-0">
+        <h5 class="modal-title fw-bold"><i class="bi bi-p-square-fill"></i> 한강공원 주차 예측</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <!-- Modal 본문 -->
+      <div class="modal-body  pt-0">
+        <ul class="nav nav-tabs  nav-fill mb-3">
+          <li class="nav-item">
+                <button class="nav-link active fw-bold"
+                                data-bs-toggle="tab"
+                                data-bs-target="#loginPane">
+                    로그인
+                </button>
+          </li>
+          <li class="nav-item">
+                <button class="nav-link fw-bold"
+                                data-bs-toggle="tab"
+                                data-bs-target="#signupPane">
+                    회원가입
+                </button>
+          </li>
+
+        </ul>
+        <!--   탭 패널들의 컨테이너       -->
+        <div class="tab-content" id="authTabContent">
+            <!--     로그인 탭 패널       -->
+            <div class="tab-pane fade show active" id="loginPane">
+                <div class="mb-3">
+                  <label for="loginEmail" class="form-label  fw-bold">이메일</label>
+                  <input type="email" class="form-control" id="loginEmail" placeholder="이메일을 입력하세요" autocomplete="email">
+                </div>
+                <div class="mb-3">
+                  <label for="loginPw" class="form-label  fw-bold">비밀번호</label>
+                  <input type="password" class="form-control" id="loginPw" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
+                </div>
+                <div class="alert alert-danger  d-none mb-3" id="loginError" role="alert">
+
+                </div>
+                <button type="button" class="btn btn-primary  w-100 fw-bold" id="loginSubmitBtn">로그인</button>
+            </div>
+            <!--     회원가입 탭 패널       -->
+            <div class="tab-pane fade" id="signupPane">
+                <div class="mb-3">
+                  <label for="signupName" class="form-label  fw-bold">이름</label>
+                  <input type="text" class="form-control" id="signupName" placeholder="이름을 입력하세요" autocomplete="name">
+                </div>
+                <div class="mb-3">
+                  <label for="signupEmail" class="form-label  fw-bold">이메일</label>
+                  <input type="email" class="form-control" id="signupEmail" placeholder="이메일을 입력하세요" autocomplete="email">
+                </div>
+                <div class="mb-3">
+                  <label for="signupPw" class="form-label  fw-bold">비밀번호</label>
+                  <input type="password" class="form-control" id="signupPw" placeholder="대·소문자·숫자·특수문자 포함 8자 이상" autocomplete="new-password">
+                </div>
+                <div class="mb-3">
+                  <label for="signupPwConfirm" class="form-label  fw-bold">비밀번호 확인</label>
+                  <input type="password" class="form-control" id="signupPwConfirm" placeholder="비밀번호를 다시 입력하세요" autocomplete="new-password">
+                </div>
+                <!-- 회원가입 오류 메시지 Alert -->
+                <div class="alert alert-danger  d-none mb-3" id="signupError" role="alert">
+
+                </div>
+                <button type="button" class="btn btn-success   w-100 fw-bold" id="signupSubmitBtn">회원가입</button>
+            </div><!-- /signupPane -->
+        </div><!-- /tab-content -->
+      </div><!-- /modal-body -->
+
+    </div><!-- /modal-content -->
+  </div><!-- /modal-dialog -->
+</div><!-- /#authModal -->
+
+<!-- Toast (알림 메시지), 화면 모서리에 잠깐 나타났다가 자동으로 사라지는 알림 컴포넌트 -->
+<div  class="toast-container" role="region" aria-live="polite">
+
+</div>
+<!-- 메인 콘텐츠 영역  -->
+<div class="container mt-4">
+    <!-- 페이지 제목 -->
+    <div class="row mb-4">
+        <div class="col">
+            <h2 class="fw-bold">한강공원 주차장</h2>
+            <p class="text-muted mb-0">
+                날짜와 시간을 선택해 주차 가능 공간을 예측합니다
+            </p>
+        </div>
+    </div>
+    <!-- 지도/목록 탭 전환   -->
+    <ul class="nav nav-tabs nav-fill mb-3"  id="viewTabs">
+      <li class="nav-item">
+            <button class="nav-link active fw-bold"
+                    data-bs-toggle="tab"
+                    data-bs-target="#mapPane"
+                    id="mapTab">
+                <i class="bi bi-geo-alt"></i> 지도
+            </button>
+      </li>
+      <li class="nav-item">
+            <button class="nav-link fw-bold"
+                    data-bs-toggle="tab"
+                    data-bs-target="#listPane"
+                    id="listTab">
+                <i class="bi bi-p-square-fill"></i> 목록
+            </button>
+      </li>
+    </ul>
+    <div class="tab-content">
+        <!--   지도 탭 패널     -->
+        <div class="tab-pane fade show active" id="mapPane">
+            <!--     카카오맵 컨테이너       -->
+            <div id="kakaoMap" class="mb-3"></div>
+            <p class="text-muted small text-center">
+                마커를 클릭하면 주차장 정보와 예측 바로가기가 나타납니다
+            </p>
+        </div>
+<!--        <script>-->
+<!--            var container = document.getElementById('kakaoMap');-->
+<!--            var options = {-->
+<!--                center: new kakao.maps.LatLng(33.450701, 126.570667),-->
+<!--                level: 3-->
+<!--            };-->
+
+<!--            var map = new kakao.maps.Map(container, options);-->
+<!--        </script>-->
+        <!--    목록 탭 패널    -->
+        <div class="tab-pane fade" id="listPane">
+            <!-- 주차장 목록 헤더 -->
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="fw-bold mb-0">주차장 목록</h5>
+                <!-- JS의 loadParkingLots()에서 "전체 11개소" 텍스트 삽입 -->
+                <span class="text-muted small" id="totalCount"></span>
+            </div>
+            <!--  Spinner (로딩 중 회전 애니메이션)  -->
+            <div id="loadingSpinner">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">로딩 중...</span>
+                </div>
+                <p class="mt-2 text-muted">주차장 정보를 불러오는 중...</p>
+            </div>
+            <!--  주차장 Card 목록  -->
+            <div class="row g-3" id="parkingList">
+                <!-- JS의 loadParkingLots()가 여기에 카드 HTML을 동적으로 삽입 -->
+            </div>
+            <!--  페이지네이션   -->
+            <nav  class="mt-4" id="paginationWrap" style="display:none" aria-label="주차장 목록 페이지">
+              <ul class="pagination  justify-content-center"  id="pagination">
+                <!-- JS의 renderPagination()이 <li> 버튼을 동적으로 삽입 -->
+              </ul>
+            </nav>
+        </div>
+    </div><!-- //tab-content -->
+</div><!-- /container -->
+
+<!-- footer: layout.js가 채워 넣음 (모든 페이지 공통) -->
+<div id="footer-placeholder"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+<!-- 공통 API 유틸리티 로드 -->
+<script src="/static/js/api.js"></script>
+<!-- 공통 navbar/footer (api.js 이후에 로드) -->
+<script src="/static/js/layout.js"></script>
+<!-- 동작 js -->
+<script>
+// 전역 상태 변수
+let currentPage = 1; // 현재 표시 중인 페이지 번호
+const PAGE_SIZE = 9; // 한 페이지당 카드 수
+let   kakaoMap   = null; // 카카오맵 인스턴스
+let   markers    = []; // 마커 객체 배열
+let   labels     = []; // 마커 아래 텍스트 라벨
+
+// 카카오맵 초기화 & 마커 생성
+async  function initKakaoMap() {
+    const container = document.querySelector("#kakaoMap");
+    // 한강 중심 좌표로 초기 위치 설정
+    const center = new kakao.maps.LatLng(37.528, 126.978); // 위도, 경도
+
+    // 지도 옵션
+    const options = {
+        center: center, // 초기 중심 좌표
+        level : 8, // 확대 레벨 (1=최대, 14=최소)
+    }
+
+    // 지도 인스턴스 생성
+    kakaoMap = new kakao.maps.Map(container, options);
+
+    // 마커 데이터
+    // GET /parking-lots API로 동적 로드(추후)
+    let lotData = [];
+    try {
+        const res = await fetch("/parking-lots?page=1&size=11");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        lotData = data.items.map(lot => ({
+            id      : lot.id,
+            name    : lot.lot_name,
+            lat     : Number(lot.lat),
+            lng     : Number(lot.lng),
+            capacity: lot.capacity,
+        }));
+    } catch (err) {
+        // 네트워크 오류·서버 오류 시 지도 영역에 안내 메시지 표시
+        console.error("주차장 좌표 로드 실패:", err);
+        container.innerHTML =
+            '<div class="alert alert-danger m-3">주차장 좌표를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>';
+        return;
+    }
+    // const lotData = [
+    //     { id:1,  name:"뚝섬한강공원주차장",   lat:37.5302, lng:127.0688, capacity:458  },
+    //     { id:2,  name:"여의도한강공원주차장",  lat:37.5285, lng:126.9337, capacity:532  },
+    //     { id:3,  name:"반포한강공원주차장",   lat:37.5126, lng:126.9995, capacity:390  },
+    //     { id:4,  name:"잠원한강공원주차장",   lat:37.5166, lng:126.9974, capacity:155  },
+    //     { id:5,  name:"망원한강공원주차장",   lat:37.5494, lng:126.8975, capacity:298  },
+    //     { id:6,  name:"난지한강공원주차장",   lat:37.5663, lng:126.8906, capacity:610  },
+    //     { id:7,  name:"강서한강공원주차장",   lat:37.5736, lng:126.8241, capacity:425  },
+    //     { id:8,  name:"양화한강공원주차장",   lat:37.5454, lng:126.9101, capacity:124  },
+    //     { id:9,  name:"이촌한강공원주차장",   lat:37.5210, lng:126.9726, capacity:303  },
+    //     { id:10, name:"잠실한강공원주차장",   lat:37.5200, lng:127.0818, capacity:390  },
+    //     { id:11, name:"광나루한강공원주차장", lat:37.5492, lng:127.1266, capacity:450  },
+    // ];
+
+    // 각 주차장에 마커 , Popover 생성
+    lotData.forEach(lot => {
+        // 마커 생성
+        const marker = new kakao.maps.Marker({
+            position: new kakao.maps.LatLng(lot.lat, lot.lng),
+            map     : kakaoMap,  // 이 지도에 마커 표시
+            zIndex  : 10, // 라벨 보다 항상 위에 표시
+        });
+        markers.push(marker);
+
+        // 마커 클릭 →  predict.html?lot_id=1  (lot_id 파라미터 포함)
+        kakao.maps.event.addListener(marker, "click", () => {
+            window.location.href = `/static/predict.html?lot_id=${lot.id}`;
+        });
+
+        // 마커 위 텍스트 라벨
+        const labelContent = `
+        <div style="padding: 2px 8px;margin-top: 6px;background: rgba(255,255,255,0.9);
+                border: 1px solid #0d6efd;border-radius: 4px;font-size: 12px;font-weight: bold;
+                color: #0d6efd;white-space: nowrap;box-shadow: 0 1px 3px rgba(0,0,0,0.2);pointer-events: none;">
+            ${lot.name}
+        </div>
+        `;
+        const label = new kakao.maps.CustomOverlay({
+            position: new kakao.maps.LatLng(lot.lat, lot.lng),
+            content : labelContent,
+            yAnchor : 0, // 마커 "아래쪽"에 표시
+            map     : kakaoMap,
+        });
+        labels.push(label);
+    });
+}
+
+// Badge 색상 결정 함수, 혼잡도 정보 계산
+function getCongestionInfo(capacity) {
+    if (capacity >= 450) return { label: "여유", badgeClass: "bg-success" };
+    if (capacity >= 200) return { label: "보통", badgeClass: "bg-warning" };
+    return                     { label: "혼잡", badgeClass: "bg-danger"  };
+}
+
+// 주차장 카드 HTML 생성
+function createParkingCard(lot) {
+    // 혼잡도 정보 계산 (label, badgeClass)
+    const congestion = getCongestionInfo(lot.capacity);
+    return `
+        <div class="col-12 col-sm-6 col-md-4"> <!-- 반응형: 한 줄에 카드 1개(12칸), 한 줄에 카드 2개(6칸씩), 한 줄에 카드 3개(4칸씩) -->
+            <div class="card  h-100 shadow-sm parking-card" onclick="goToPredict(${lot.id})">
+                  <div class="card-body">
+                    <h6 class="card-title  fw-bold mb-1">${lot.lot_name}</h6>
+                    <p class="text-muted small mb-2"><i class="bi bi-geo-fill"></i>  ${lot.district}</p>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-secondary small">총 ${lot.capacity}면</span>
+                        <span class="badge ${congestion.badgeClass}">
+                            ${congestion.label}
+                        </span>
+                    </div>
+                  </div>
+                  <div class="card-footer bg-transparent border-0 pt-0">
+                    <small class="text-primary"><i class="bi bi-search"></i> 클릭하면 예측 페이지로 이동</small>
+                  </div>
+            </div>
+        </div>
+    `
+}
+
+// 페이지네이션 생성
+function renderPagination(total, currentPage) {
+    const totalPages = Math.ceil(total / PAGE_SIZE); //총 페이지 수 계산 (올림) : 2페이지
+    if (totalPages <= 1) {
+        document.querySelector("#paginationWrap").style.display = "none";
+        return;
+    }
+    // 2페이지 이상이면 표시
+    document.querySelector("#paginationWrap").style.display = "block";
+    let html = "";
+    for (let i = 1; i <= totalPages; i++) {
+        // 현재 페이지이면 active 클래스 추가 (파란 배경)
+        const isActive = (i === currentPage) ? "active" : "";
+        html += `
+            <li class="page-item ${isActive}">
+                <button class="page-link" onclick="loadParkingLots(${i})">
+                    ${i}
+                </button>
+            </li>
+        `;
+    }
+    // 생성한 HTML을 pagination ul에 삽입
+    document.querySelector("#pagination").innerHTML = html;
+}
+
+// loadParkingLots(page) — 주차장 목록 API 호출 & 렌더링
+async function loadParkingLots(page = 1) {
+    // 현재 페이지 전역 변수 업데이트
+    currentPage = page;
+    // Spinner 표시 + 기존 카드 제거
+    document.querySelector("#loadingSpinner").style.display = "block";
+    document.querySelector("#parkingList").innerHTML = "";
+    try {
+        // GET /parking-lots?page=1&size=9 호출
+        const data = await apiGet(`/parking-lots?page=${page}&size=${PAGE_SIZE}`);
+        // 총 개수 표시
+        document.querySelector("#totalCount").textContent = `전체 ${data.total}개소`;
+
+        const listEl = document.querySelector("#parkingList"); //div
+        if (data.items.length === 0) { // parking_info 테이블에 데이터가 없을 때
+            listEl.innerHTML = `
+                <div class="col-12 text-center text-muted py-5">
+                    <p class="mb-0">등록된 주차장이 없습니다.</p>
+                    <small>python data/collect_parking_info.py 를 실행하세요.</small>
+                </div>
+            `;
+            return;
+        }
+
+        // 카드 HTML 생성 & 삽입
+        listEl.innerHTML = data.items.map(lot => createParkingCard(lot)).join("");
+
+        // 페이지네이션 렌더링
+        renderPagination(data.total, page);
+
+    } catch (error) {
+        document.querySelector("#parkingList").innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-danger" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill"></i> 주차장 정보를 불러올 수 없습니다.<br>
+                    <small>python main.py 실행 여부를 확인하세요.</small>
+                </div>
+            </div>
+        `;
+
+    } finally { // try 성공이든 catch 실패든 반드시 실행
+        document.getElementById("loadingSpinner").style.display = "none";
+    }
+}
+
+// 예측 페이지로 이동
+function goToPredict(lotId) {
+    window.location.href = `/static/predict.html?lot_id=${lotId}`;
+}
+
+// DOMContentLoaded — 페이지 초기화 이벤트
+document.addEventListener("DOMContentLoaded", () => { // HTML 파싱이 완료되어 모든 DOM 요소에 접근 가능한 시점
+    if (typeof updateNavbar === "function") updateNavbar();
+
+    // 페이지 로드 즉시 1페이지 주차장 목록 가져오기
+    loadParkingLots(1);
+    // Navbar 초기 상태 복원, 새로고침 시 localStorage에 토큰이 있으면 로그인 상태로 표시
+    // updateNavbar();
+
+    // 카카오맵 초기화 (지도 탭), kakao 객체가 준비된 후 실행
+    if (typeof kakao !== "undefined") {
+        kakao.maps.load(() => initKakaoMap()); // SDK가 완전히 로드된 후 콜백 실행
+    } else { // SDK 로드 실패 시
+         document.getElementById("kakaoMap").innerHTML =
+            '<div class="text-center py-5 text-muted">카카오맵 로드 실패<br><small>앱키를 확인하세요</small></div>';
+    }
+
+    // 지도 탭으로 이동할 때 맵 크기 재계산
+    document.querySelector("#mapTab").addEventListener("shown.bs.tab", () => { //탭 전환 완료 후 발생하는 Bootstrap 이벤트
+        if (kakaoMap) {
+            kakaoMap.relayout();  // 지도 컨테이너 크기 재계산
+        }
+
+    });
+/*
+    // 로그아웃 버튼
+    document.querySelector("#logoutBtn")
+        .addEventListener("click", handleLogout);
+    // 로그인 제출 버튼
+    document.querySelector("#loginSubmitBtn")
+        .addEventListener("click", handleLogin);
+    // 비밀번호 필드에서 Enter 키 → 로그인 실행
+    document.querySelector("#loginPw")
+        .addEventListener("keydown", (e) => {
+            if (e.key === "Enter") handleLogin();
+        });
+    // 회원가입 제출 버튼
+    document.querySelector("#signupSubmitBtn")
+        .addEventListener("click", handleSignup);
+
+    // Modal 닫힘 이벤트, 이 시점에 입력값과 오류 메시지를 초기화
+    document.querySelector("#authModal")
+        .addEventListener("hidden.bs.modal", () => { //Bootstrap Modal이 완전히 닫힌 후 발생하는 커스텀 이벤트
+            // 모든 입력 필드 초기화
+            ["loginEmail", "loginPw",
+             "signupName", "signupEmail", "signupPw", "signupPwConfirm"]
+                .forEach(id => {
+                    document.querySelector("#" + id).value = "";
+                    });
+            // 오류 메시지 초기화 (d-none 추가 + 텍스트 제거)
+            clearError("loginError");
+            clearError("signupError");
+        });
+
+ */
+});
+</script>
+</body>
+</html>

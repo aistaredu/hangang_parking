@@ -1,0 +1,10 @@
+.env
+.env.example
+*.sql
+.venv/
+__pycache__/
+*.pyc
+# models_pkl/
+.idea/
+*.log
+mlruns/
